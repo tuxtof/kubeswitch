@@ -30,6 +30,7 @@ import (
 	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	seedmanagementv1alpha1 "github.com/gardener/gardener/pkg/apis/seedmanagement/v1alpha1"
 	vaultapi "github.com/hashicorp/vault/api"
+	infisical "github.com/infisical/go-sdk"
 	"github.com/linode/linodego"
 	"github.com/ovh/go-ovh/ovh"
 	"github.com/rancher/norman/clientbase"
@@ -178,4 +179,11 @@ type PluginStore struct {
 	KubeconfigStore types.KubeconfigStore
 	Config          *types.StoreConfigPlugin
 	Client          plugins.Store
+}
+
+type InfisicalStore struct {
+	Logger          *logrus.Entry
+	KubeconfigStore types.KubeconfigStore
+	Config          *types.StoreConfigInfisical
+	Client          infisical.InfisicalClientInterface
 }
