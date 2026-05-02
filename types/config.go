@@ -24,7 +24,7 @@ import (
 type StoreKind string
 
 // ValidStoreKinds contains all valid store kinds
-var ValidStoreKinds = sets.NewString(string(StoreKindVault), string(StoreKindFilesystem), string(StoreKindGardener), string(StoreKindGKE), string(StoreKindAzure), string(StoreKindEKS), string(StoreKindExoscale), string(StoreKindRancher), string(StoreKindOVH), string(StoreKindScaleway), string(StoreKindDigitalOcean), string(StoreKindAkamai), string(StoreKindCapi), string(StoreKindPlugin))
+var ValidStoreKinds = sets.NewString(string(StoreKindVault), string(StoreKindFilesystem), string(StoreKindGardener), string(StoreKindGKE), string(StoreKindAzure), string(StoreKindEKS), string(StoreKindExoscale), string(StoreKindRancher), string(StoreKindOVH), string(StoreKindScaleway), string(StoreKindDigitalOcean), string(StoreKindAkamai), string(StoreKindCapi), string(StoreKindPlugin), string(StoreKindInfisical))
 
 // ValidConfigVersions contains all valid config versions
 var ValidConfigVersions = sets.NewString("v1alpha1")
@@ -58,6 +58,8 @@ const (
 	StoreKindCapi StoreKind = "capi"
 	// StoreKindPlugin is an identifier for the Plugin store
 	StoreKindPlugin StoreKind = "plugin"
+	// StoreKindInfisical is an identifier for the Infisical store
+	StoreKindInfisical StoreKind = "infisical"
 )
 
 type Config struct {
@@ -287,4 +289,22 @@ type StoreConfigCapi struct {
 type StoreConfigPlugin struct {
 	CmdPath string   `yaml:"cmdPath"`
 	Args    []string `yaml:"args"`
+}
+
+type StoreConfigInfisical struct {
+	// SiteURL is the URL of the Infisical instance (defaults to https://app.infisical.com)
+	SiteURL string `yaml:"siteURL"`
+	// ClientID is the client ID for Universal Auth
+	ClientID string `yaml:"clientID"`
+	// ClientSecret is the client secret for Universal Auth
+	ClientSecret string `yaml:"clientSecret"`
+	// ProjectID is the Infisical project ID
+	ProjectID string `yaml:"projectID"`
+	// Environment is the Infisical environment slug (e.g., dev, staging, prod)
+	Environment string `yaml:"environment"`
+	// SecretPath is the path within the Infisical project to search for secrets (defaults to "/")
+	SecretPath string `yaml:"secretPath"`
+	// SecretKey is the specific secret key name to retrieve a kubeconfig from.
+	// If not set, all secrets in the path are treated as kubeconfigs.
+	SecretKey string `yaml:"secretKey"`
 }
