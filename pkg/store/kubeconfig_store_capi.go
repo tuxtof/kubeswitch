@@ -28,6 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/tools/clientcmd"
+	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
 	clusterv1beta2 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	utilkubeconfig "sigs.k8s.io/cluster-api/util/kubeconfig"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -93,6 +94,7 @@ func (s *CapiStore) VerifyKubeconfigPaths() error {
 func (s *CapiStore) getCapiClient() (client.Client, error) {
 	scheme := runtime.NewScheme()
 	utilruntime.Must(corev1.AddToScheme(scheme))
+	utilruntime.Must(clusterv1beta1.AddToScheme(scheme))
 	utilruntime.Must(clusterv1beta2.AddToScheme(scheme))
 
 	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
@@ -134,35 +136,56 @@ func (s *CapiStore) StartSearch(channel chan storetypes.SearchResult) {
 		return
 	}
 
-	// list clusters
-	clusters := &clusterv1beta2.ClusterList{}
-	err := s.Client.List(ctx, clusters)
-	if err != nil {
-		// if kubeconfigPath for mgmt cluster is defined error out and return if the Cluster CRD is not installed
-		// otherwise silently fail as our current context might not have CAPI installed
-		if s.Config.KubeconfigPath != "" || !meta.IsNoMatchError(err) {
+	// list clusters — try v1beta2 first, fall back to v1beta1 for older management clusters
+	type namedCluster struct{ namespace, name string }
+	var foundClusters []namedCluster
+
+	v2clusters := &clusterv1beta2.ClusterList{}
+	err := s.Client.List(ctx, v2clusters)
+	if err != nil && !meta.IsNoMatchError(err) {
+		if s.Config.KubeconfigPath != "" {
 			channel <- storetypes.SearchResult{
 				KubeconfigPath: "",
-				Error:          fmt.Errorf("unable to list clusters: %w", err),
+				Error:          fmt.Errorf("unable to list v1beta2 clusters: %w", err),
 			}
 			return
 		}
-		s.Logger.Debug("CAPI: cannot listing v1beta2.Cluster resources, not currently connected to a cluster with CAPI installed")
-		channel <- storetypes.SearchResult{
-			KubeconfigPath: "",
+	}
+	if err == nil {
+		for _, c := range v2clusters.Items {
+			foundClusters = append(foundClusters, namedCluster{c.Namespace, c.Name})
 		}
-		return
+	} else {
+		// v1beta2 not supported — fall back to v1beta1
+		s.Logger.Debug("CAPI: v1beta2 not available, falling back to v1beta1")
+		v1clusters := &clusterv1beta1.ClusterList{}
+		err = s.Client.List(ctx, v1clusters)
+		if err != nil {
+			if s.Config.KubeconfigPath != "" || !meta.IsNoMatchError(err) {
+				channel <- storetypes.SearchResult{
+					KubeconfigPath: "",
+					Error:          fmt.Errorf("unable to list clusters: %w", err),
+				}
+				return
+			}
+			s.Logger.Debug("CAPI: cannot list Cluster resources, not currently connected to a cluster with CAPI installed")
+			channel <- storetypes.SearchResult{KubeconfigPath: ""}
+			return
+		}
+		for _, c := range v1clusters.Items {
+			foundClusters = append(foundClusters, namedCluster{c.Namespace, c.Name})
+		}
 	}
 
-	for _, cluster := range clusters.Items {
-		s.Logger.Debug("CAPI: found cluster", "name", cluster.Name, "namespace", cluster.Namespace)
+	for _, cluster := range foundClusters {
+		s.Logger.Debug("CAPI: found cluster", "name", cluster.name, "namespace", cluster.namespace)
 
 		channel <- storetypes.SearchResult{
-			KubeconfigPath: fmt.Sprintf("%s-%s", cluster.Namespace, cluster.Name),
+			KubeconfigPath: fmt.Sprintf("%s-%s", cluster.namespace, cluster.name),
 			Error:          nil,
 			Tags: map[string]string{
-				"namespace": cluster.Namespace,
-				"name":      cluster.Name,
+				"namespace": cluster.namespace,
+				"name":      cluster.name,
 			},
 		}
 	}
