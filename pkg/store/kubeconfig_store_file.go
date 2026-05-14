@@ -24,6 +24,7 @@ import (
 
 	"github.com/karrick/godirwalk"
 	"github.com/sirupsen/logrus"
+	"gopkg.in/yaml.v3"
 
 	storetypes "github.com/danielfoehrkn/kubeswitch/pkg/store/types"
 	"github.com/danielfoehrkn/kubeswitch/types"
@@ -33,10 +34,27 @@ func NewFilesystemStore(
 	kubeconfigName string,
 	kubeconfigStore types.KubeconfigStore,
 ) (*FilesystemStore, error) {
+	filesystemStoreConfig := &types.StoreConfigFilesystem{}
+	if kubeconfigStore.Config != nil {
+		buf, err := yaml.Marshal(kubeconfigStore.Config)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal filesystem store config: %w", err)
+		}
+		if err := yaml.Unmarshal(buf, filesystemStoreConfig); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal filesystem store config: %w", err)
+		}
+	}
+
+	disableDirectorySearch := false
+	if filesystemStoreConfig.DisableDirectorySearch != nil {
+		disableDirectorySearch = *filesystemStoreConfig.DisableDirectorySearch
+	}
+
 	return &FilesystemStore{
-		Logger:          logrus.New().WithField("store", types.StoreKindFilesystem),
-		KubeconfigStore: kubeconfigStore,
-		KubeconfigName:  kubeconfigName,
+		Logger:                 logrus.New().WithField("store", types.StoreKindFilesystem),
+		KubeconfigStore:        kubeconfigStore,
+		KubeconfigName:         kubeconfigName,
+		DisableDirectorySearch: disableDirectorySearch,
 	}, nil
 }
 
@@ -80,7 +98,11 @@ func (s *FilesystemStore) StartSearch(channel chan storetypes.SearchResult) {
 	wg := sync.WaitGroup{}
 	for _, path := range s.kubeconfigDirectories {
 		wg.Add(1)
-		go s.searchDirectory(&wg, path, channel)
+		if s.DisableDirectorySearch {
+			go s.searchDirectoryFlat(&wg, path, channel)
+		} else {
+			go s.searchDirectory(&wg, path, channel)
+		}
 	}
 	wg.Wait()
 }
@@ -113,6 +135,43 @@ func (s *FilesystemStore) searchDirectory(
 		channel <- storetypes.SearchResult{
 			KubeconfigPath: "",
 			Error:          fmt.Errorf("failed to find kubeconfig files in directory: %v", err),
+		}
+	}
+}
+
+func (s *FilesystemStore) searchDirectoryFlat(
+	wg *sync.WaitGroup,
+	searchPath string,
+	channel chan storetypes.SearchResult,
+) {
+	defer wg.Done()
+
+	entries, err := os.ReadDir(searchPath)
+	if err != nil {
+		channel <- storetypes.SearchResult{
+			KubeconfigPath: "",
+			Error:          fmt.Errorf("failed to read directory %q: %v", searchPath, err),
+		}
+		return
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		matched, err := filepath.Match(s.KubeconfigName, entry.Name())
+		if err != nil {
+			channel <- storetypes.SearchResult{
+				KubeconfigPath: "",
+				Error:          err,
+			}
+			return
+		}
+		if matched {
+			channel <- storetypes.SearchResult{
+				KubeconfigPath: filepath.Join(searchPath, entry.Name()),
+				Error:          nil,
+			}
 		}
 	}
 }

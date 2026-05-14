@@ -42,11 +42,12 @@ import (
 )
 
 type FilesystemStore struct {
-	Logger                *logrus.Entry
-	KubeconfigStore       types.KubeconfigStore
-	KubeconfigName        string
-	kubeconfigDirectories []string
-	kubeconfigFilepaths   []string
+	Logger                 *logrus.Entry
+	KubeconfigStore        types.KubeconfigStore
+	KubeconfigName         string
+	DisableDirectorySearch bool
+	kubeconfigDirectories  []string
+	kubeconfigFilepaths    []string
 }
 
 type VaultStore struct {

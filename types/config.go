@@ -139,6 +139,13 @@ type Cache struct {
 	Config interface{} `yaml:"config"`
 }
 
+type StoreConfigFilesystem struct {
+	// DisableDirectorySearch disables recursive directory traversal.
+	// When set to true, only explicit file paths are searched, not directories.
+	// + optional
+	DisableDirectorySearch *bool `yaml:"disableDirectorySearch"`
+}
+
 type StoreConfigVault struct {
 	// VaultAPIAddress is the URL of the Vault API
 	VaultAPIAddress    string `yaml:"vaultAPIAddress"`

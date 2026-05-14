@@ -43,3 +43,9 @@ all: format check build
 revendor:
 	@GO111MODULE=on go mod vendor
 	@GO111MODULE=on go mod tidy
+
+
+.PHONY: local
+local:
+	@env GOOS=darwin GOARCH=arm64 go build -ldflags "-w -X github.com/danielfoehrkn/kubeswitch/cmd/switcher.version=${VERSION} -X github.com/danielfoehrkn/kubeswitch/cmd/switcher.buildDate=${DATE}" -o hack/switch/switcher_darwin_arm64 ./cmd/main.go
+	cp hack/switch/switcher_darwin_arm64 /Users/cris/.local/bin/switcher
